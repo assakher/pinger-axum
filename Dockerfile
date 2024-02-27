@@ -1,0 +1,22 @@
+FROM rust:slim-bookworm AS builder
+
+WORKDIR /opt/app
+COPY . /opt/app/
+RUN apt-get update &&\
+    apt-get install -y pkg-config libssl-dev gcc cmake libjemalloc2
+RUN cargo build --release
+
+
+FROM debian:bookworm-slim
+
+EXPOSE 8080
+ENV JEMALLOC_SYS_WITH_MALLOC_CONF=background_thread:true,narenas:1,tcache:false,dirty_decay_ms:0,muzzy_decay_ms:0,abort_conf:true
+WORKDIR /opt/app
+RUN apt-get update &&\
+    apt-get upgrade -y &&\
+    apt-get install -y libssl-dev &&\
+    apt-get clean -y
+RUN adduser --disabled-password --gecos '' pinger
+USER pinger:pinger
+COPY --from=builder /opt/app/target/release/pinger .
+CMD [ "./pinger" ]
