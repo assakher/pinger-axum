@@ -17,9 +17,9 @@ services:
       timeout: 3s
       test: ["CMD", "curl", "-f", "http://localhost:8080/system/healthz"]
     cpus: 4
-    mem_limit: 1GB
+    mem_limit: 256MB
 
-        
+
 
   prometheus:
     image: prom/prometheus

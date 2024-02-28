@@ -45,8 +45,8 @@ pub async fn send(ipv4_nets: &Vec<Ipv4Network>, target_port: u32, _timeout: Dura
             Ok((task_id, _r)) => Some((task_id, _r)),
         };
         if unwrap_join.is_some() {
-            let (_task_id, task) = unwrap_join.unwrap();
-            let task_addr = task_adress[&_task_id.to_string()].clone();
+            let (task_id, task) = unwrap_join.unwrap();
+            let task_addr = task_adress[&task_id.to_string()].clone();
             match task {
                 Err(e) => {
                     tracing::error!("ELAPSED: {:?}", e);

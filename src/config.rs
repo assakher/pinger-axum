@@ -15,17 +15,13 @@ pub struct Config {
     pub target_port: u32,
     pub connect_timeout: u32,
     pub ping_period: u32,
-    // pub prometheus_endpoint_uri: String,
-    // pub prometheus_push_period: Duration,
-    // pub prometheus_user: String,
-    // pub prometheus_password: String,
-    // pub subnets: Vec<>,
 }
 
 impl Config {
     pub fn new() -> Result<Self, anyhow::Error> {
         dotenv().unwrap_or(PathBuf::new());
 
+        // TODO: replace ? with expect
         let log_level: LevelFilter =
             LevelFilter::from_str(env::var("LOG_LEVEL").expect("LOG_LEVEL not set").as_str())?;
         let http_port = env::var("SERVING_PORT")
@@ -40,21 +36,6 @@ impl Config {
         let ping_period = env::var("PING_PERIOD")
             .expect("PING_PERIOD not set")
             .parse()?;
-        // let prometheus_endpoint_uri = env::var("PROMETHEUS_ENDPOINT_URI")
-        //     .expect("PROMETHEUS_ENDPOINT_URI not set")
-        //     .parse()?;
-        // let prometheus_push_period = Duration::from_secs(
-        //     env::var("PROMETHEUS_PUSH_PERIOD")
-        //         .expect("PROMETHEUS_PUSH_PERIOD not set")
-        //         .parse()
-        //         .expect("PROMETHEUS_PUSH_PERIOD is not a valid u32"),
-        // );
-        // let prometheus_user = env::var("PROMETHEUS_USER")
-        //     .expect("PROMETHEUS_USER not set")
-        //     .parse()?;
-        // let prometheus_password = env::var("PROMETHEUS_PASSWORD")
-        //     .expect("PROMETHEUS_PASSWORD not set")
-        //     .parse()?;
 
         let conf = Config {
             log_level,
@@ -62,15 +43,12 @@ impl Config {
             target_port,
             connect_timeout,
             ping_period,
-            // prometheus_endpoint_uri,
-            // prometheus_push_period,
-            // prometheus_user,
-            // prometheus_password,
         };
 
         Ok(conf)
     }
 
+    // TODO: proper nets parsing
     pub fn parse_ipv4_nets() -> Result<ipnetwork::Ipv4Network, anyhow::Error> {
         let test = ipnetwork::Ipv4Network::new(Ipv4Addr::new(192, 168, 0, 0), 16)?;
 

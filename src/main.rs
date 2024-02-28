@@ -22,15 +22,13 @@ use crate::requester::looped_ping;
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+// TODO: split main into multiple builders
 #[tokio::main]
 pub async fn main() -> Result<(), anyhow::Error> {
     let config = Config::new()?;
-    // console_subscriber::init();
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), config.serving_port);
-    // let console_layer = console_subscriber::spawn();
     tracing_subscriber::registry()
-        // .with(console_layer)
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(
                 format!(
@@ -42,9 +40,7 @@ pub async fn main() -> Result<(), anyhow::Error> {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
-    // console_subscriber::init();
     let net = Config::parse_ipv4_nets()?;
-    // let requester = Requester::new();
     let prometheus = PrometheusBuilder::new()
         .idle_timeout(MetricKindMask::ALL, Some(Duration::from_secs(120)))
         .install_recorder()
@@ -58,13 +54,15 @@ pub async fn main() -> Result<(), anyhow::Error> {
         .nest("/system", routers::healthcheck::system_router())
         .nest("/", routers::prometheus::metrics_router(prometheus))
         .layer(CorsLayer::permissive())
+        // TODO: add info span on response
         .layer(TraceLayer::new_for_http().make_span_with(tracer::CustomSpan::new()))
         .fallback(errors::handler_404);
-    tracing::info!("Configured app...");
+    tracing::info!("Configured app");
     let server = axum::serve(listener, app).with_graceful_shutdown(shutdown::shutdown_signal());
     tracing::info!("Listening on {addr}");
-    tracing::info!("Began polling...");
+    tracing::info!("Begin polling...");
     let polling = tokio::spawn(async move {
+        // TODO: pass timeout duration
         looped_ping(Duration::from_secs(120), vec![net], config.target_port).await
     });
     server.await?;
