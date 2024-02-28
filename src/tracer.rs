@@ -1,9 +1,9 @@
-use super::config::Config;
+
 use axum::http::Request;
 use tower_http::trace::MakeSpan;
 use tracing::{Level, Span};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
+
+
 use uuid;
 
 // pub fn get_tracer(config: Config) -> () {

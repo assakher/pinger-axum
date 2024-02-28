@@ -5,7 +5,6 @@ mod routers;
 mod shutdown;
 mod tracer;
 use std::{
-    future::IntoFuture,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     time::Duration,
@@ -14,23 +13,22 @@ use std::{
 use axum::Router;
 use config::Config;
 use dotenvy::dotenv;
+use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio::net::TcpListener;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::requester::looped_ping;
 
-
- #[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc; 
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 #[tokio::main]
 pub async fn main() -> Result<(), anyhow::Error> {
-    dotenv().unwrap_or(PathBuf::new());
     let config = Config::new()?;
     // console_subscriber::init();
 
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), config.http_port);
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), config.serving_port);
     // let console_layer = console_subscriber::spawn();
     tracing_subscriber::registry()
         // .with(console_layer)
@@ -48,12 +46,15 @@ pub async fn main() -> Result<(), anyhow::Error> {
     // console_subscriber::init();
     let net = Config::parse_ipv4_nets()?;
     // let requester = Requester::new();
+    let prometheus = PrometheusBuilder::new().install_recorder().expect("Failed to setup Prometheus exporter");
+
     let listener = TcpListener::bind(addr).await.unwrap();
     let app = Router::new()
         .with_state(config::State {
             config: config.clone(),
         })
         .nest("/system", routers::healthcheck::system_router())
+        .nest("/", routers::prometheus::metrics_router(prometheus))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http().make_span_with(tracer::CustomSpan::new()))
         .fallback(errors::handler_404);

@@ -30,3 +30,7 @@ Cargo.lock
 dhat.*
 *.txt
 heaptrack.*
+
+.env
+prometheus
+grafana

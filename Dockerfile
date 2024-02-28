@@ -1,22 +1,26 @@
-FROM rust:slim-bookworm AS builder
+FROM rust:alpine3.19 AS builder
 
-WORKDIR /opt/app
-COPY . /opt/app/
-RUN apt-get update &&\
-    apt-get install -y pkg-config libssl-dev gcc cmake libjemalloc2
+ENV RUSTFLAGS='-C link-arg=-s'
+WORKDIR /opt/build
+COPY . /opt/build/
+RUN apk update &&\
+    apk add pkgconfig libressl-dev build-base
+RUN wget -O - https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2 | tar -xj && \
+    cd jemalloc-5.2.1 && \
+    ./configure && \
+    make && \
+    make install
 RUN cargo build --release
+RUN echo $(ls /opt/build/target/release -la)
 
 
-FROM debian:bookworm-slim
+FROM alpine:3.19
 
 EXPOSE 8080
 ENV JEMALLOC_SYS_WITH_MALLOC_CONF=background_thread:true,narenas:1,tcache:false,dirty_decay_ms:0,muzzy_decay_ms:0,abort_conf:true
 WORKDIR /opt/app
-RUN apt-get update &&\
-    apt-get upgrade -y &&\
-    apt-get install -y libssl-dev &&\
-    apt-get clean -y
+RUN apk update
 RUN adduser --disabled-password --gecos '' pinger
 USER pinger:pinger
-COPY --from=builder /opt/app/target/release/pinger .
+COPY --from=builder /opt/build/target/release/pinger .
 CMD [ "./pinger" ]
