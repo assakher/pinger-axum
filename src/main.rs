@@ -4,16 +4,15 @@ mod requester;
 mod routers;
 mod shutdown;
 mod tracer;
+use axum::Router;
+use config::Config;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
     time::Duration,
 };
 
-use axum::Router;
-use config::Config;
-use dotenvy::dotenv;
 use metrics_exporter_prometheus::PrometheusBuilder;
+use metrics_util::MetricKindMask;
 use tokio::net::TcpListener;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -46,7 +45,10 @@ pub async fn main() -> Result<(), anyhow::Error> {
     // console_subscriber::init();
     let net = Config::parse_ipv4_nets()?;
     // let requester = Requester::new();
-    let prometheus = PrometheusBuilder::new().install_recorder().expect("Failed to setup Prometheus exporter");
+    let prometheus = PrometheusBuilder::new()
+        .idle_timeout(MetricKindMask::ALL, Some(Duration::from_secs(120)))
+        .install_recorder()
+        .expect("Failed to setup Prometheus exporter");
 
     let listener = TcpListener::bind(addr).await.unwrap();
     let app = Router::new()

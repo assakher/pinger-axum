@@ -1,4 +1,4 @@
-use std::{env, net::Ipv4Addr, path::PathBuf, str::FromStr, time::Duration};
+use std::{env, net::Ipv4Addr, path::PathBuf, str::FromStr};
 
 use dotenvy::dotenv;
 use tracing::log::LevelFilter;

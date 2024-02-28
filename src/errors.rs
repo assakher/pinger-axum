@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct ErrorMsg {
-    error: String
+    error: String,
 }
 
 impl ErrorMsg {
@@ -28,5 +28,8 @@ impl IntoResponse for AppError {
 }
 
 pub async fn handler_404() -> impl IntoResponse {
-    (StatusCode::NOT_FOUND, Json(ErrorMsg::from_err_msg("Requested url not found".into())))
+    (
+        StatusCode::NOT_FOUND,
+        Json(ErrorMsg::from_err_msg("Requested url not found".into())),
+    )
 }

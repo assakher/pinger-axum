@@ -1,17 +1,16 @@
 [package]
-name = "pinger"
+name    = "pinger"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.62"
-axum = "0.7.4"
+anyhow  = "1.0.62"
+axum    = "0.7.4"
 dotenvy = "0.15.2"
-serde = { version = "1.0.144", features = ["derive"] }
-# serde_json = "1.0.103"
-tokio = { version = "1.20.1", features = ["full"] }
+serde   = { version = "1.0.144", features = ["derive"] }
+tokio = { version = "1.20.1", features = ["full", "tracing"] }
 tower-http = { version = "0.5.2", features = ["full"] }
 strum = { version = "0.26.1", features = ["derive"] }
 strum_macros = "0.26.1"
@@ -23,17 +22,18 @@ tracing-subscriber = { version = "0.3.15", features = [
 ] }
 uuid = "1.4.1"
 ipnetwork = "0.20.0"
-reqwest = "0.11.24"
-console-subscriber = "0.2.0"
 tikv-jemalloc-ctl = { version = "0.5.4", features = ['use_std'] }
 tikv-jemallocator = { version = "0.5.4", features = [
     'unprefixed_malloc_on_supported_platforms',
 ] }
 metrics = { version = "0.22.1", default-features = false }
-metrics-exporter-prometheus = { version = "0.13.1", default-features = false , features = ["http-listener"]}
+metrics-exporter-prometheus = { version = "0.13.1", default-features = false, features = [
+    "http-listener",
+] }
+metrics-util = "0.16.2"
 
 [profile.release]
 opt-level = 3
-lto = true
-# codegen-units = 1
+lto       = true
+codegen-units = 1
 panic = 'abort'
