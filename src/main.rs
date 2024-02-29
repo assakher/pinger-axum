@@ -1,69 +1,50 @@
+mod components;
 mod config;
 mod errors;
 mod requester;
 mod routers;
 mod shutdown;
 mod tracer;
-use axum::Router;
+
 use config::Config;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
 
-use metrics_exporter_prometheus::PrometheusBuilder;
-use metrics_util::MetricKindMask;
 use tokio::net::TcpListener;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::requester::looped_ping;
+use crate::{
+    components::{get_axum_app, get_prometheus},
+    requester::looped_ping,
+    tracer::get_tracer,
+};
 
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-// TODO: split main into multiple builders
 #[tokio::main]
 pub async fn main() -> Result<(), anyhow::Error> {
     let config = Config::new()?;
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), config.serving_port);
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(
-                format!(
-                    "pinger={0},tower_http={0},axum::rejection=trace",
-                    config.log_level.as_str()
-                )
-                .into(),
-            ),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-    let net = Config::parse_ipv4_nets()?;
-    let prometheus = PrometheusBuilder::new()
-        .idle_timeout(MetricKindMask::ALL, Some(Duration::from_secs(120)))
-        .install_recorder()
-        .expect("Failed to setup Prometheus exporter");
-
-    let listener = TcpListener::bind(addr).await.unwrap();
-    let app = Router::new()
-        .with_state(config::State {
-            config: config.clone(),
-        })
-        .nest("/system", routers::healthcheck::system_router())
-        .nest("/", routers::prometheus::metrics_router(prometheus))
-        .layer(CorsLayer::permissive())
-        // TODO: add info span on response
-        .layer(TraceLayer::new_for_http().make_span_with(tracer::CustomSpan::new()))
-        .fallback(errors::handler_404);
+    get_tracer(&config);
+    let nets = Config::parse_ipv4_nets()?;
+    let prometheus = get_prometheus(&config);
     tracing::info!("Configured app");
+    let app = get_axum_app(&config, prometheus);
+    let listener = TcpListener::bind(addr).await.unwrap();
     let server = axum::serve(listener, app).with_graceful_shutdown(shutdown::shutdown_signal());
     tracing::info!("Listening on {addr}");
     tracing::info!("Begin polling...");
     let polling = tokio::spawn(async move {
-        // TODO: pass timeout duration
-        looped_ping(Duration::from_secs(120), vec![net], config.target_port).await
+        looped_ping(
+            Duration::from_secs(config.connect_timeout as u64),
+            Duration::from_secs(config.ping_period as u64),
+            nets,
+            config.target_port,
+        )
+        .await
     });
     server.await?;
     polling.abort();

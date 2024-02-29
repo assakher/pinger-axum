@@ -1,22 +1,31 @@
 use std::{collections::HashMap, time::Duration};
 
-use ipnetwork::Ipv4Network;
 use tokio::{io::AsyncWriteExt, net::TcpStream, time::sleep};
 
-pub async fn looped_ping(timeout: Duration, ipv4_nets: Vec<Ipv4Network>, target_port: u32) {
+use crate::config::Address;
+
+pub async fn looped_ping(
+    timeout: Duration,
+    ping_period: Duration,
+    ipv4_nets: Vec<Address>,
+    target_port: u32,
+) {
     loop {
         tracing::info!("Begin pinging cycle");
         send(&ipv4_nets, target_port, timeout).await;
         tracing::info!("End pinging cycle");
-        sleep(timeout).await;
+        sleep(ping_period).await;
     }
 }
 
-pub async fn send(ipv4_nets: &Vec<Ipv4Network>, target_port: u32, _timeout: Duration) {
+pub async fn send(ipv4_nets: &Vec<Address>, target_port: u32, _timeout: Duration) {
     let mut tasks = tokio::task::JoinSet::new();
     let mut task_adress: HashMap<String, String> = HashMap::new();
     for network in ipv4_nets.iter() {
-        for addr in network.iter() {
+        for addr in network.addr.iter().filter(|i| {
+            let last = i.octets()[3];
+            last >= network.offset && last <= network.limit
+        }) {
             let url = format!("{addr}:{target_port}");
             let r =
                 tasks
@@ -34,9 +43,7 @@ pub async fn send(ipv4_nets: &Vec<Ipv4Network>, target_port: u32, _timeout: Dura
             }
         }
     }
-    // task_adress;
     while let Some(res) = tasks.join_next_with_id().await {
-        // task_adress;
         let unwrap_join = match res {
             Err(_err) => {
                 tracing::error!("JOIN ERROR: {:?}", _err);

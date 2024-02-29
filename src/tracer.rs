@@ -2,22 +2,24 @@ use axum::http::Request;
 use tower_http::trace::MakeSpan;
 use tracing::{Level, Span};
 
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid;
 
-// pub fn get_tracer(config: Config) -> () {
-//     tracing_subscriber::registry()
-//         .with(
-//             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(
-//                 format!(
-//                     "axum_app={0},tower_http={0},axum::rejection=trace",
-//                     config.log_level.as_str()
-//                 )
-//                 .into(),
-//             ),
-//         )
-//         .with(tracing_subscriber::fmt::layer())
-//         .init()
-// }
+use crate::config::Config;
+
+pub fn get_tracer(config: &Config) {
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or(
+        format!(
+            "pinger={0},tower_http={0},axum::rejection=trace",
+            config.log_level.as_str()
+        )
+        .into(),
+    );
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::layer())
+        .init()
+}
 
 #[derive(Debug, Clone)]
 pub struct CustomSpan {

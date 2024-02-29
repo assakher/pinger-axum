@@ -31,6 +31,8 @@ metrics-exporter-prometheus = { version = "0.13.1", default-features = false, fe
     "http-listener",
 ] }
 metrics-util = "0.16.2"
+regex = "1.10.3"
+lazy_static = "1.4.0"
 
 [profile.release]
 opt-level = 3
