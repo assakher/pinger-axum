@@ -41,6 +41,36 @@ pub async fn send(ipv4_nets: &Vec<Address>, target_port: u32, _timeout: Duration
                 }
                 Err(_) => (),
             }
+            if tasks.len() == 20000 {
+                while let Some(res) = tasks.join_next_with_id().await {
+                    let unwrap_join = match res {
+                        Err(_err) => {
+                            tracing::error!("JOIN ERROR: {:?}", _err);
+                            None
+                        }
+                        Ok((task_id, _r)) => Some((task_id, _r)),
+                    };
+                    if unwrap_join.is_some() {
+                        let (task_id, task) = unwrap_join.unwrap();
+                        let task_addr = task_adress[&task_id.to_string()].clone();
+                        match task {
+                            Err(e) => {
+                                tracing::error!("ELAPSED: {:?}", e);
+                                metrics::gauge!("pingError", "ipAddr" => task_addr, "reason" => "connectionTimeout").set(1.0);
+                            }
+                            Ok(resp) => match resp {
+                                Ok(mut stream) => {
+                                    stream.shutdown().await.unwrap_or(());
+                                }
+                                Err(err) => {
+                                    tracing::error!("ERR: {:?}", err);
+                                    metrics::gauge!("pingError", "ipAddr" => task_addr, "reason" => err.kind().to_string());
+                                }
+                            },
+                        }
+                    }
+                }
+            }
         }
     }
     while let Some(res) = tasks.join_next_with_id().await {
