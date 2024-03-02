@@ -95,7 +95,7 @@ impl Config {
                     let addr = &caps["addr"];
                     let mask = &caps["mask"];
                     let offset = caps.name("offset").map_or("0", |m| m.as_str());
-                    let limit = caps.name("limit").map_or("0", |m| m.as_str());
+                    let limit = caps.name("limit").map_or("255", |m| m.as_str());
                     match Address::new(addr, mask, limit, offset) {
                         Ok(a) => processd_addreses.push(a),
                         Err(e) => {
