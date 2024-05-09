@@ -1,6 +1,7 @@
 mod components;
 mod config;
 mod errors;
+mod models;
 mod requester;
 mod routers;
 mod shutdown;

@@ -8,7 +8,7 @@ use tracing::log::LevelFilter;
 
 lazy_static! {
     static ref ADDR_PATTERN: Regex =
-        Regex::new("^(?P<addr>.+)/(?P<mask>.*?),?(?P<offset>[^,]*?),?(?P<limit>[^,]*?)$").unwrap();
+        Regex::new(r"^(?P<addr>[\d.]+)/(?P<mask>\d+),?(?P<offset>[^,]*?),?(?P<limit>[^,]*?)$").unwrap();
 }
 
 pub struct Address {
@@ -21,8 +21,8 @@ impl Address {
     fn new(addr: &str, mask: &str, limit: &str, offset: &str) -> Result<Self, anyhow::Error> {
         let parsed_addr = Ipv4Addr::from_str(addr)?;
         let parsed_mask = mask.parse()?;
-        let parsed_offset = offset.parse()?;
-        let parsed_limit = limit.parse()?;
+        let parsed_offset = offset.parse().unwrap_or(0);
+        let parsed_limit = limit.parse().unwrap_or(255);
         return Ok(Address {
             addr: Ipv4Network::new(parsed_addr, parsed_mask)?,
             limit: parsed_limit,
@@ -96,6 +96,7 @@ impl Config {
                     let mask = &caps["mask"];
                     let offset = caps.name("offset").map_or("0", |m| m.as_str());
                     let limit = caps.name("limit").map_or("255", |m| m.as_str());
+                    println!("{addr}, {mask},{offset}, {limit}");
                     match Address::new(addr, mask, limit, offset) {
                         Ok(a) => processd_addreses.push(a),
                         Err(e) => {
@@ -108,7 +109,6 @@ impl Config {
                 }
             }
         }
-        let _test = ipnetwork::Ipv4Network::new(Ipv4Addr::new(192, 168, 0, 0), 16)?;
 
         return Ok(processd_addreses);
     }
