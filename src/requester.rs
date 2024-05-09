@@ -39,6 +39,7 @@ fn intersperse_networks(ipv4_nets: Vec<Address>) -> Vec<Ipv4Addr> {
 
 fn handle() {}
 
+// TODO: rename
 async fn process_tcp(mut stream: TcpStream) -> Result<Vec<u8>, anyhow::Error> {
     // stream.set_nonblocking(true)?;
     let _res = stream.write("{\"command\":\"summary\"}".as_bytes()).await?;
@@ -52,7 +53,10 @@ async fn process_tcp(mut stream: TcpStream) -> Result<Vec<u8>, anyhow::Error> {
     Ok(res)
 }
 
+// TODO: nedds better name
 async fn deserialize(data: Vec<u8>) -> Result<CgStatusResponse, anyhow::Error> {
+    // TODO: replace with take_while
+    // TODO: remove double sanitizing
     let convert = String::from_utf8(data.into_iter().filter(|c| c > &0).collect())?;
     println!("STRINGIFIED: {convert}");
 
@@ -65,6 +69,8 @@ async fn deserialize(data: Vec<u8>) -> Result<CgStatusResponse, anyhow::Error> {
 //     metrics::gauge!("pingError", "ipAddr" => task_addr, "reason" => err.kind().to_string());
 // }
 
+// TODO: reorganize function order
+// put outer functions above
 pub async fn looped_ping(
     timeout: Duration,
     ping_period: Duration,
@@ -80,6 +86,8 @@ pub async fn looped_ping(
     }
 }
 
+// TODO: refactor different logic for buffer and outer loops
+//  maybe replace queue limit with something more sophisticated
 pub async fn send(ipv4_nets: &Vec<Ipv4Addr>, target_port: u32, _timeout: Duration) {
     let mut tasks = tokio::task::JoinSet::new();
     let mut task_adress: HashMap<String, String> = HashMap::new();
@@ -101,6 +109,7 @@ pub async fn send(ipv4_nets: &Vec<Ipv4Addr>, target_port: u32, _timeout: Duratio
             }
             Err(_) => (),
         }
+        // FIXME: local testing, return 20000
         if tasks.len() == 1 {
             while let Some(res) = tasks.join_next_with_id().await {
                 let unwrap_join = match res {
@@ -122,7 +131,9 @@ pub async fn send(ipv4_nets: &Vec<Ipv4Addr>, target_port: u32, _timeout: Duratio
                             Ok(mut stream) => {
                                 let r = process_tcp(stream).await;
                                 if r.is_ok() {
+                                    // TODO: put resp data into prometheus
                                     let resp = deserialize(r.unwrap()).await;
+                                    // TODO: probably needs macros to avoid boilerplate and use introscpection
                                     match resp {
                                         Ok(res) => tracing::info!("RESPOPNSE: {:?}", res),
                                         Err(err) => {
