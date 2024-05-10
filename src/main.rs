@@ -44,6 +44,7 @@ pub async fn main() -> Result<(), anyhow::Error> {
             Duration::from_secs(config.ping_period as u64),
             nets,
             config.target_port,
+            config.max_concurrent_connections,
         )
         .await
     });

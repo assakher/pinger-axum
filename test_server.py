@@ -1,4 +1,8 @@
-{
+from socket import create_server
+
+
+if __name__ == "__main__":
+    data = """{
   "STATUS": [
     {
       "STATUS": "S",
@@ -43,3 +47,15 @@
   ],
   "id": 1
 }
+""".encode()
+    with create_server(('localhost', 8008)) as server:
+        while True:
+            opened_sock, addr = server.accept()
+            try:
+                opened_sock.recv(1)
+                opened_sock.sendall(data)
+            except KeyboardInterrupt:
+                opened_sock.close()
+                raise
+            finally:
+                opened_sock.close()

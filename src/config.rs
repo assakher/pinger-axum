@@ -8,7 +8,8 @@ use tracing::log::LevelFilter;
 
 lazy_static! {
     static ref ADDR_PATTERN: Regex =
-        Regex::new(r"^(?P<addr>[\d.]+)/(?P<mask>\d+),?(?P<offset>[^,]*?),?(?P<limit>[^,]*?)$").unwrap();
+        Regex::new(r"^(?P<addr>[\d.]+)/(?P<mask>\d+),?(?P<offset>[^,]*?),?(?P<limit>[^,]*?)$")
+            .unwrap();
 }
 
 pub struct Address {
@@ -44,6 +45,7 @@ pub struct Config {
     pub connect_timeout: u32,
     pub ping_period: u32,
     pub forget_metric_timeout: u32,
+    pub max_concurrent_connections: usize,
 }
 
 impl Config {
@@ -73,6 +75,10 @@ impl Config {
             .expect("FORGET_METRIC_TIMEOUT not set")
             .parse()
             .expect("FORGET_METRIC_TIMEOUT is not a valid u32");
+        let max_concurrent_connections = env::var("MAX_CONCURRENT_CONNECTIONS")
+            .expect("MAX_CONCURRENT_CONNECTIONS not set")
+            .parse()
+            .expect("MAX_CONCURRENT_CONNECTIONS is not a valid u32");
 
         let conf = Config {
             log_level,
@@ -81,6 +87,7 @@ impl Config {
             connect_timeout,
             ping_period,
             forget_metric_timeout,
+            max_concurrent_connections,
         };
 
         Ok(conf)
