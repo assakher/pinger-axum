@@ -132,15 +132,28 @@ async fn ping(
 }
 
 async fn send_ping_rpc(mut stream: TcpStream) -> Result<Vec<u8>, anyhow::Error> {
-    let _res = stream.write("{\"command\":\"summary\"}".as_bytes()).await?;
-    let mut res: Vec<u8> = vec![];
-    let mut buf = [0; 4096];
-    while let Ok(_chunck) = stream.read(&mut buf[..]).await {
-        res.extend(buf.iter());
-        buf = [0; 4096];
-    }
+    tracing::debug!("Sending ping request");
+    let _res = stream
+        .write("{\"command\":\"summary\"}\r\n".as_bytes())
+        .await;
+    let r = match _res {
+        Ok(_) => {
+            let mut res: Vec<u8> = vec![];
+            let mut buf = [0; 1024];
+            while let Ok(_chunck) = stream.read(&mut buf).await {
+                res.extend(buf.iter());
+                buf = [0; 1024];
+            }
+            tracing::debug!("PING SUCCESS {_res:?}");
+            Ok(res)
+        }
+        Err(err) => {
+            tracing::debug!("PING ERROR: {:?}", err);
+            Err(err)
+        }
+    };
     stream.shutdown().await.unwrap_or(());
-    Ok(res)
+    Ok(r?)
 }
 
 async fn deserialize_response(data: Vec<u8>) -> Result<CgStatusResponse, anyhow::Error> {
