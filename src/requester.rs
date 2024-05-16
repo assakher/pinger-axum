@@ -28,7 +28,7 @@ fn intersperse_networks(ipv4_nets: Vec<Address>) -> Vec<Ipv4Addr> {
     let mut interspersed = vec![];
     let mut empty = 0;
     let mut idx = 0;
-    let a: Vec<Vec<Ipv4Addr>> = ipv4_nets
+    let mut a: Vec<Vec<Ipv4Addr>> = ipv4_nets
         .iter()
         .map(|i| {
             i.addr
@@ -42,14 +42,23 @@ fn intersperse_networks(ipv4_nets: Vec<Address>) -> Vec<Ipv4Addr> {
         .collect();
     let subnets_len = a.len();
     while empty < subnets_len {
-        for v in &a {
+        let mut is_empty = -1;
+        for (i, v) in a.iter().enumerate() {
+            println!("{v:?}");
             match v.get(idx) {
                 Some(addr) => interspersed.push(addr.clone()),
-                None => empty += 1,
+                None => {
+                    empty += 1;
+                    is_empty = i as i32;
+                }
             }
         }
-        idx += 1
+        idx += 1;
+        if is_empty > -1 {
+            a.remove(is_empty.abs() as usize);
+        }
     }
+    tracing::info!("{interspersed:?}, {subnets_len}");
     interspersed
 }
 
@@ -133,16 +142,18 @@ async fn ping(
 
 async fn send_ping_rpc(mut stream: TcpStream) -> Result<Vec<u8>, anyhow::Error> {
     tracing::debug!("Sending ping request");
-    let _res = stream
-        .write("{\"command\":\"summary\"}\r\n".as_bytes())
-        .await;
+    let _res = stream.write("{\"command\":\"summary\"}".as_bytes()).await;
     let r = match _res {
         Ok(_) => {
             let mut res: Vec<u8> = vec![];
             let mut buf = [0; 1024];
-            while let Ok(_chunck) = stream.read(&mut buf).await {
+            while let Ok(_chunck) = stream.read(&mut buf[..]).await {
+                tracing::debug!("Reading response, total length: {}", res.len());
                 res.extend(buf.iter());
-                buf = [0; 1024];
+                if res.ends_with(&[0, 0]) {
+                    break;
+                }
+                buf.fill(0);
             }
             tracing::debug!("PING SUCCESS {_res:?}");
             Ok(res)
