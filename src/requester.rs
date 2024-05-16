@@ -44,7 +44,6 @@ fn intersperse_networks(ipv4_nets: Vec<Address>) -> Vec<Ipv4Addr> {
     while empty < subnets_len {
         let mut is_empty = -1;
         for (i, v) in a.iter().enumerate() {
-            println!("{v:?}");
             match v.get(idx) {
                 Some(addr) => interspersed.push(addr.clone()),
                 None => {
@@ -58,7 +57,6 @@ fn intersperse_networks(ipv4_nets: Vec<Address>) -> Vec<Ipv4Addr> {
             a.remove(is_empty.abs() as usize);
         }
     }
-    tracing::info!("{interspersed:?}, {subnets_len}");
     interspersed
 }
 
