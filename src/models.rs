@@ -13,7 +13,6 @@ pub struct Status {
     #[serde(alias = "Description")]
     description: String,
 }
-
 #[derive(Debug, Deserialize)]
 pub struct Summary {
     #[serde(alias = "Elapsed")]
@@ -41,19 +40,19 @@ pub struct Summary {
     #[serde(alias = "Utility")]
     utility: f64,
     #[serde(alias = "Discarded")]
-    discarded: u64,
+    discarded: f64,
     #[serde(alias = "Stale")]
-    stale: u64,
+    stale: f64,
     #[serde(alias = "Get Failures")]
-    get_failures: u64,
+    get_failures: f64,
     #[serde(alias = "Local Work")]
-    local_work: u64,
+    local_work: f64,
     #[serde(alias = "Remote Failures")]
-    remote_failures: u64,
+    remote_failures: f64,
     #[serde(alias = "Network Blocks")]
-    network_blocks: u64,
+    network_blocks: f64,
     #[serde(alias = "Total MH")]
-    total_mh: u64,
+    total_mh: f64,
     #[serde(alias = "Work Utility")]
     work_utility: f64,
     #[serde(alias = "Difficulty Accepted")]
