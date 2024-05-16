@@ -57,13 +57,13 @@ pub struct Summary {
     #[serde(alias = "Work Utility")]
     work_utility: f64,
     #[serde(alias = "Difficulty Accepted")]
-    difficulty_accepted: u64,
+    difficulty_accepted: f64,
     #[serde(alias = "Difficulty Rejected")]
-    difficulty_rejected: u64,
+    difficulty_rejected: f64,
     #[serde(alias = "Difficulty Stale")]
-    difficulty_stale: u64,
+    difficulty_stale: f64,
     #[serde(alias = "Best Share")]
-    best_share: u64,
+    best_share: f64,
     #[serde(alias = "Device Hardware%")]
     device_hardware: f64,
     #[serde(alias = "Device Rejected%")]
@@ -71,7 +71,7 @@ pub struct Summary {
     #[serde(alias = "Pool Rejected%")]
     pool_rejected: f64,
     #[serde(alias = "Pool Stale%")]
-    pool_stale: u64,
+    pool_stale: f64,
     #[serde(alias = "Last getwork")]
     lastgetwork: u64,
 }
