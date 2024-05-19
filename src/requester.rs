@@ -6,7 +6,10 @@ use tokio::{
     time::{error::Elapsed, sleep},
 };
 
-use crate::{config::Address, models::CgStatusResponse};
+use crate::{
+    config::Address,
+    models::{CgPoolsResponse, CgStatusResponse, CgVersionResponse, MetricsInfo},
+};
 
 pub async fn looped_ping(
     timeout: Duration,
@@ -113,21 +116,42 @@ async fn ping(
                 }
                 Ok(resp) => match resp {
                     Ok(stream) => {
-                        let r = send_ping_rpc(stream).await;
-                        if r.is_ok() {
-                            let resp = deserialize_response(r.unwrap()).await;
-                            match resp {
-                                Ok(res) => {
-                                    tracing::info!("RESPOPNSE: {:?}", res);
-                                    save_metrics(task_addr, res)
-                                }
-                                Err(err) => {
-                                    tracing::error!("RESPONSE READ ERROR: {:?}", err);
-                                    metrics::gauge!("pingError", "ipAddr" => task_addr, "reason" => format!("{err:?}"));
+                        let results = send_ping_rpc(stream).await;
+                        let mut metrics = MetricsInfo::new();
+                        if results[2].is_ok() {
+                            let version: Result<CgVersionResponse, anyhow::Error> =
+                                deserialize_response(results[2].as_ref().unwrap()).await;
+                            match version {
+                                Ok(version) => metrics.fill_version(version),
+                                Err(e) => {
+                                    tracing::error!("RESPONSE VERSION READ ERROR: {:?}", e);
                                 }
                             }
                         }
+                        if results[0].is_ok() {
+                            let status: Result<CgStatusResponse, anyhow::Error> =
+                                deserialize_response(results[0].as_ref().unwrap()).await;
+                            match status {
+                                Ok(status) => metrics.fiil_status(status),
+                                Err(e) => {
+                                    tracing::error!("RESPONSE STATUS READ ERROR: {:?}", e);
+                                }
+                            }
+                        }
+
+                        if results[1].is_ok() {
+                            let pools: Result<CgPoolsResponse, anyhow::Error> =
+                                deserialize_response(results[1].as_ref().unwrap()).await;
+                            match pools {
+                                Ok(pools) => metrics.fill_pools(pools),
+                                Err(e) => {
+                                    tracing::error!("RESPONSE POOLS READ ERROR: {:?}", e);
+                                }
+                            }
+                        }
+                        save_metrics(task_addr, metrics);
                     }
+
                     Err(err) => {
                         tracing::error!("ERR: {:?}", err);
                         metrics::gauge!("pingError", "ipAddr" => task_addr, "reason" => err.kind().to_string());
@@ -138,52 +162,111 @@ async fn ping(
     }
 }
 
-async fn send_ping_rpc(mut stream: TcpStream) -> Result<Vec<u8>, anyhow::Error> {
+async fn send_ping_rpc(mut stream: TcpStream) -> Vec<Result<Vec<u8>, Error>> {
     tracing::debug!("Sending ping request");
-    let _res = stream.write("{\"command\":\"summary\"}".as_bytes()).await;
-    let r = match _res {
-        Ok(_) => {
-            let mut res: Vec<u8> = vec![];
-            let mut buf = [0; 1024];
-            while let Ok(_chunck) = stream.read(&mut buf[..]).await {
-                tracing::debug!("Reading response, total length: {}", res.len());
-                res.extend(buf.iter());
-                if res.ends_with(&[0, 0]) {
-                    break;
+    let commands = vec![
+        "{\"command\":\"summary\"}".as_bytes(),
+        "{\"command\":\"pools\"}".as_bytes(),
+        "{\"command\":\"version\"}".as_bytes(),
+    ];
+    let mut results: Vec<Result<Vec<u8>, Error>> = Vec::with_capacity(3);
+    for c in commands {
+        let mut buf = [0; 1024];
+        let _res = stream.write(c).await;
+        let r = match _res {
+            Ok(_) => {
+                let mut res: Vec<u8> = vec![];
+                while let Ok(_chunck) = stream.read(&mut buf[..]).await {
+                    tracing::debug!("Reading response, total length: {}", res.len());
+                    res.extend(buf.iter());
+                    if res.ends_with(&[0]) {
+                        break;
+                    }
+                    buf.fill(0);
                 }
-                buf.fill(0);
+                tracing::debug!("PING SUCCESS {_res:?}");
+                Ok(res)
             }
-            tracing::debug!("PING SUCCESS {_res:?}");
-            Ok(res)
-        }
-        Err(err) => {
-            tracing::debug!("PING ERROR: {:?}", err);
-            Err(err)
-        }
-    };
+            Err(err) => {
+                tracing::debug!("PING ERROR: {:?}", err);
+                Err(err)
+            }
+        };
+        buf.fill(0);
+        results.push(r)
+    }
     stream.shutdown().await.unwrap_or(());
-    Ok(r?)
+    results
 }
 
-async fn deserialize_response(data: Vec<u8>) -> Result<CgStatusResponse, anyhow::Error> {
-    let convert = String::from_utf8(data.into_iter().take_while(|c| *c > 0).collect())?;
-    let response: CgStatusResponse = serde_json::from_str(convert.as_str())?;
+async fn deserialize_response<T: serde::de::DeserializeOwned>(
+    data: &Vec<u8>,
+) -> Result<T, anyhow::Error> {
+    let convert = String::from_utf8(data.iter().take_while(|c| **c > 0).map(|c| *c).collect())?;
+    let response: T = serde_json::from_str(convert.as_str())?;
     Ok(response)
 }
 
-fn save_metrics(task_addr: String, resp: CgStatusResponse) {
-    for (idx, parts) in resp.summary.iter().enumerate() {
-        metrics::gauge!("mhs_av", "ipAddr" => task_addr.clone(), "idx" => idx.to_string())
-            .set(parts.mhs_av);
-        metrics::gauge!("mhs30s", "ipAddr" => task_addr.clone(), "idx" => idx.to_string())
-            .set(parts.mhs30s);
-        metrics::gauge!("mhs1m", "ipAddr" => task_addr.clone(), "idx" => idx.to_string())
-            .set(parts.mhs1m);
-        metrics::gauge!("mhs5m", "ipAddr" => task_addr.clone(), "idx" => idx.to_string())
-            .set(parts.mhs5m);
-        metrics::gauge!("mhs15m", "ipAddr" => task_addr.clone(), "idx" => idx.to_string())
-            .set(parts.mhs15m);
-        metrics::gauge!("rejected", "ipAddr" => task_addr.clone(), "idx" => idx.to_string())
-            .set(parts.rejected as f64);
-    }
+fn save_metrics(task_addr: String, metrics: MetricsInfo) {
+    let labels = [
+        ("ipAddr", format!("{}", task_addr)),
+        ("model", format!("{}", metrics.model)),
+        ("loader", format!("{}", metrics.loader)),
+        ("dna", format!("{}", metrics.dna)),
+        ("mac", format!("{}", metrics.mac)),
+        (
+            "pool",
+            format!(
+                "{}",
+                metrics
+                    .pools
+                    .get(0)
+                    .and_then(|i| Some(i.pool))
+                    .or(Some(0))
+                    .unwrap()
+            ),
+        ),
+        (
+            "url",
+            format!(
+                "{}",
+                metrics
+                    .pools
+                    .get(0)
+                    .and_then(|i| Some(i.url.as_str()))
+                    .or(Some(""))
+                    .unwrap()
+            ),
+        ),
+        (
+            "status",
+            format!(
+                "{}",
+                metrics
+                    .pools
+                    .get(0)
+                    .and_then(|i| Some(i.status.as_str()))
+                    .or(Some(""))
+                    .unwrap()
+            ),
+        ),
+        (
+            "user",
+            format!(
+                "{}",
+                metrics
+                    .pools
+                    .get(0)
+                    .and_then(|i| Some(i.user.as_str()))
+                    .or(Some(""))
+                    .unwrap()
+            ),
+        ),
+    ];
+    metrics::gauge!("mhs_av", &labels).set(metrics.mhs_av);
+    metrics::gauge!("mhs30s", &labels).set(metrics.mhs30s);
+    metrics::gauge!("mhs1m", &labels).set(metrics.mhs1m);
+    metrics::gauge!("mhs5m", &labels).set(metrics.mhs5m);
+    metrics::gauge!("mhs15m", &labels).set(metrics.mhs15m);
+    metrics::gauge!("rejected", &labels).set(metrics.rejected as f64);
 }
