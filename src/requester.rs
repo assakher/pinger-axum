@@ -119,7 +119,7 @@ async fn ping(
                         let r = send_ping_rpc(stream).await;
                         if r.is_ok() {
                             let resp: Result<CgMultiResponse, anyhow::Error> =
-                                deserialize_response(&r.unwrap()).await;
+                                deserialize_response(r.unwrap()).await;
                             match resp {
                                 Ok(res) => {
                                     tracing::debug!("RESPOPNSE: {:?}", res);
@@ -151,15 +151,10 @@ async fn send_ping_rpc(mut stream: TcpStream) -> Result<Vec<u8>, anyhow::Error> 
     let r = match _res {
         Ok(_) => {
             let mut res: Vec<u8> = vec![];
-            let mut buf = [0; 2048];
-            while let Ok(_chunck) = stream.read(&mut buf[..]).await {
-                tracing::debug!("Reading response, total length: {}", res.len());
-                res.extend(buf.iter());
-                if res.ends_with(&[0, 0]) {
-                    break;
-                }
-                buf.fill(0);
-            }
+            match stream.read_to_end(&mut res).await {
+                Ok(r) => tracing::debug!("SUCCESFULLY READ {} BYTES", r),
+                Err(e) => tracing::error!("ERROR READING RESP STREAM {e:?}"),
+            };
             tracing::debug!("PING SUCCESS {_res:?}");
             Ok(res)
         }
@@ -173,14 +168,9 @@ async fn send_ping_rpc(mut stream: TcpStream) -> Result<Vec<u8>, anyhow::Error> 
 }
 
 async fn deserialize_response<T: serde::de::DeserializeOwned>(
-    data: &Vec<u8>,
+    data: Vec<u8>,
 ) -> Result<T, anyhow::Error> {
-    let convert = String::from_utf8(
-        data.iter()
-            .take_while(|c| (**c > 0) & (**c != '\0' as u8))
-            .map(|c| *c)
-            .collect(),
-    )?;
+    let convert = String::from_utf8(data.into_iter().take_while(|c| *c != b'\0').collect())?;
     let response: T = serde_json::from_str(convert.as_str())?;
     Ok(response)
 }
