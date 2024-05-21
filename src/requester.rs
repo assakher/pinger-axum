@@ -175,7 +175,12 @@ async fn send_ping_rpc(mut stream: TcpStream) -> Result<Vec<u8>, anyhow::Error> 
 async fn deserialize_response<T: serde::de::DeserializeOwned>(
     data: &Vec<u8>,
 ) -> Result<T, anyhow::Error> {
-    let convert = String::from_utf8(data.iter().take_while(|c| **c > 0).map(|c| *c).collect())?;
+    let convert = String::from_utf8(
+        data.iter()
+            .take_while(|c| (**c > 0) & (**c != '\0' as u8))
+            .map(|c| *c)
+            .collect(),
+    )?;
     let response: T = serde_json::from_str(convert.as_str())?;
     Ok(response)
 }
