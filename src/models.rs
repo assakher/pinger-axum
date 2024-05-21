@@ -126,7 +126,7 @@ pub struct CgPoolsResponse {
     pub id: u64,
     #[serde(alias = "STATUS")]
     pub status: Vec<Status>,
-    #[serde(alias = "VERSION")]
+    #[serde(alias = "POOLS")]
     pub pools: Vec<Pools>,
 }
 
@@ -206,12 +206,12 @@ pub struct Pools {
     current_block_version: u64,
 }
 
-pub struct PingResponses(
-    pub Result<Vec<u8>, std::io::Error>,
-    pub Result<Vec<u8>, std::io::Error>,
-    pub Result<Vec<u8>, std::io::Error>,
-);
-
+#[derive(Debug, Deserialize)]
+pub struct CgMultiResponse {
+    pub summary: Vec<CgStatusResponse>,
+    pub pools: Vec<CgPoolsResponse>,
+    pub version: Vec<CgVersionResponse>,
+}
 #[derive(Debug, Default)]
 pub struct MetricsPool {
     pub pool: u32,
@@ -247,33 +247,24 @@ pub struct MetricsInfo {
 }
 
 impl MetricsInfo {
-    pub fn new() -> MetricsInfo {
+    pub fn new(cg_ping: CgMultiResponse) -> MetricsInfo {
         MetricsInfo {
-            ..Default::default()
+            mhs_av: cg_ping.summary[0].summary[0].mhs_av,
+            mhs30s: cg_ping.summary[0].summary[0].mhs30s,
+            mhs1m: cg_ping.summary[0].summary[0].mhs1m,
+            mhs5m: cg_ping.summary[0].summary[0].mhs5m,
+            mhs15m: cg_ping.summary[0].summary[0].mhs15m,
+            rejected: cg_ping.summary[0].summary[0].rejected as f64,
+            pools: cg_ping
+                .pools
+                .into_iter()
+                .map(|pools| pools.pools.into_iter().map(|i| MetricsPool::new(i)))
+                .flatten()
+                .collect(),
+            model: cg_ping.version[0].version[0].model.clone(),
+            loader: cg_ping.version[0].version[0].loader.clone(),
+            dna: cg_ping.version[0].version[0].dna.clone(),
+            mac: cg_ping.version[0].version[0].mac.clone(),
         }
-    }
-
-    pub fn fill_version(self: &mut Self, version: CgVersionResponse) {
-        self.model = version.version[0].model.clone();
-        self.loader = version.version[0].loader.clone();
-        self.dna = version.version[0].dna.clone();
-        self.mac = version.version[0].mac.clone();
-    }
-
-    pub fn fill_pools(self: &mut Self, pools: CgPoolsResponse) {
-        self.pools = pools
-            .pools
-            .into_iter()
-            .map(|i| MetricsPool::new(i))
-            .collect()
-    }
-
-    pub fn fiil_status(self: &mut Self, status: CgStatusResponse) {
-        self.mhs_av = status.summary[0].mhs_av;
-        self.mhs30s = status.summary[0].mhs30s;
-        self.mhs1m = status.summary[0].mhs1m;
-        self.mhs5m = status.summary[0].mhs5m;
-        self.mhs15m = status.summary[0].mhs15m;
-        self.rejected = status.summary[0].rejected as f64;
     }
 }

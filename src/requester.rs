@@ -8,7 +8,7 @@ use tokio::{
 
 use crate::{
     config::Address,
-    models::{CgPoolsResponse, CgStatusResponse, CgVersionResponse, MetricsInfo},
+    models::{CgMultiResponse, CgPoolsResponse, CgStatusResponse, CgVersionResponse, MetricsInfo},
 };
 
 pub async fn looped_ping(
@@ -116,42 +116,23 @@ async fn ping(
                 }
                 Ok(resp) => match resp {
                     Ok(stream) => {
-                        let results = send_ping_rpc(stream).await;
-                        let mut metrics = MetricsInfo::new();
-                        if results[2].is_ok() {
-                            let version: Result<CgVersionResponse, anyhow::Error> =
-                                deserialize_response(results[2].as_ref().unwrap()).await;
-                            match version {
-                                Ok(version) => metrics.fill_version(version),
-                                Err(e) => {
-                                    tracing::error!("RESPONSE VERSION READ ERROR: {:?}", e);
+                        let r = send_ping_rpc(stream).await;
+                        if r.is_ok() {
+                            let resp: Result<CgMultiResponse, anyhow::Error> =
+                                deserialize_response(&r.unwrap()).await;
+                            match resp {
+                                Ok(res) => {
+                                    tracing::debug!("RESPOPNSE: {:?}", res);
+                                    let metrics = MetricsInfo::new(res);
+                                    save_metrics(task_addr, metrics)
+                                }
+                                Err(err) => {
+                                    tracing::error!("RESPONSE READ ERROR: {:?}", err);
+                                    metrics::gauge!("pingError", "ipAddr" => task_addr, "reason" => format!("{err:?}"));
                                 }
                             }
                         }
-                        if results[0].is_ok() {
-                            let status: Result<CgStatusResponse, anyhow::Error> =
-                                deserialize_response(results[0].as_ref().unwrap()).await;
-                            match status {
-                                Ok(status) => metrics.fiil_status(status),
-                                Err(e) => {
-                                    tracing::error!("RESPONSE STATUS READ ERROR: {:?}", e);
-                                }
-                            }
-                        }
-
-                        if results[1].is_ok() {
-                            let pools: Result<CgPoolsResponse, anyhow::Error> =
-                                deserialize_response(results[1].as_ref().unwrap()).await;
-                            match pools {
-                                Ok(pools) => metrics.fill_pools(pools),
-                                Err(e) => {
-                                    tracing::error!("RESPONSE POOLS READ ERROR: {:?}", e);
-                                }
-                            }
-                        }
-                        save_metrics(task_addr, metrics);
                     }
-
                     Err(err) => {
                         tracing::error!("ERR: {:?}", err);
                         metrics::gauge!("pingError", "ipAddr" => task_addr, "reason" => err.kind().to_string());
@@ -162,41 +143,33 @@ async fn ping(
     }
 }
 
-async fn send_ping_rpc(mut stream: TcpStream) -> Vec<Result<Vec<u8>, Error>> {
+async fn send_ping_rpc(mut stream: TcpStream) -> Result<Vec<u8>, anyhow::Error> {
     tracing::debug!("Sending ping request");
-    let commands = vec![
-        "{\"command\":\"summary\"}".as_bytes(),
-        "{\"command\":\"pools\"}".as_bytes(),
-        "{\"command\":\"version\"}".as_bytes(),
-    ];
-    let mut results: Vec<Result<Vec<u8>, Error>> = Vec::with_capacity(3);
-    for c in commands {
-        let mut buf = [0; 1024];
-        let _res = stream.write(c).await;
-        let r = match _res {
-            Ok(_) => {
-                let mut res: Vec<u8> = vec![];
-                while let Ok(_chunck) = stream.read(&mut buf[..]).await {
-                    tracing::debug!("Reading response, total length: {}", res.len());
-                    res.extend(buf.iter());
-                    if res.ends_with(&[0]) {
-                        break;
-                    }
-                    buf.fill(0);
+    let _res = stream
+        .write("{\"command\":\"summary+pools+version\"}".as_bytes())
+        .await;
+    let r = match _res {
+        Ok(_) => {
+            let mut res: Vec<u8> = vec![];
+            let mut buf = [0; 2048];
+            while let Ok(_chunck) = stream.read(&mut buf[..]).await {
+                tracing::debug!("Reading response, total length: {}", res.len());
+                res.extend(buf.iter());
+                if res.ends_with(&[0, 0]) {
+                    break;
                 }
-                tracing::debug!("PING SUCCESS {_res:?}");
-                Ok(res)
+                buf.fill(0);
             }
-            Err(err) => {
-                tracing::debug!("PING ERROR: {:?}", err);
-                Err(err)
-            }
-        };
-        buf.fill(0);
-        results.push(r)
-    }
+            tracing::debug!("PING SUCCESS {_res:?}");
+            Ok(res)
+        }
+        Err(err) => {
+            tracing::debug!("PING ERROR: {:?}", err);
+            Err(err)
+        }
+    };
     stream.shutdown().await.unwrap_or(());
-    results
+    Ok(r?)
 }
 
 async fn deserialize_response<T: serde::de::DeserializeOwned>(
